@@ -8,7 +8,7 @@ import (
 )
 
 func Test_pso(t *testing.T) {
-	epsilon := 1e-2
+	epsilon := 1e-3
 	type args struct {
 		f          func([]float64) float64
 		min        float64

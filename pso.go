@@ -2,7 +2,6 @@ package main
 
 import (
 	"math"
-	"math/bits"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -27,111 +26,112 @@ type particle struct {
 	locMin          float64
 }
 
+type solution struct {
+	pos []float64
+	min float64
+}
+
 // Particle swarm optimization
 func pso(f func([]float64) float64, min, max float64, dimensions int) (float64, []float64) {
-	pr := parameters[dimensions]
 	numCPU := runtime.NumCPU()
-	if numCPU&(numCPU-1) == 0 && numCPU < 256 {
-		p := bits.TrailingZeros8(uint8(numCPU))
-		pr.iterations >>= p << 1
-		pr.iterations += p
-	} else {
-		pr.iterations /= numCPU * numCPU
-		pr.iterations += int(math.Sqrt(float64(numCPU)))
+	swarms := numCPU - numCPU/4
+	moves := swarms / 3
+	pr := parameters[dimensions]
+	pr.iterations /= numCPU
+	halfMin := min / 2
+
+	ring := make(chan solution, swarms)
+	for n := 0; n < swarms; n++ {
+		ring <- solution{pos: make([]float64, dimensions), min: math.MaxFloat64}
 	}
 
-	signal := make(chan struct{})
-	chBest := make(chan []float64)
-	chMinimum := make(chan float64)
-	go func() {
-		var best []float64
-		minimum := math.MaxFloat64
-		for {
-			select {
-			case minimum = <-chMinimum:
-			case chMinimum <- minimum:
-			case best = <-chBest:
-			case chBest <- best:
-			case <-signal:
-				return
-			}
-		}
-	}()
-
 	var wg sync.WaitGroup
-	wg.Add(numCPU)
-	for c := 0; c < numCPU; c++ {
+	wg.Add(swarms)
+	for c := 0; c < swarms; c++ {
 		c := c
 		go func() {
 			defer wg.Done()
-			var (
-				fitness float64
-				swarm   [swarmSize]particle
-				r       *rand.Rand
-			)
-			swarmBest := make([]float64, dimensions)
-			swarmMinimum := math.MaxFloat64
 
-			r = rand.New(rand.NewSource(time.Now().UnixNano() + int64(c))) //#nosec G404
-			for i := range swarm {
-				swarm[i].vel, swarm[i].pos, swarm[i].pBest = make([]float64, dimensions), make([]float64, dimensions), make([]float64, dimensions)
+			var cSwarm [swarmSize]particle
+			cBest := make([]float64, dimensions)
+			cMin := math.MaxFloat64
+			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(c))) //#nosec G404
+
+			for i := range cSwarm {
+				cSwarm[i].vel, cSwarm[i].pos, cSwarm[i].pBest = make([]float64, dimensions), make([]float64, dimensions), make([]float64, dimensions)
 				for d := 0; d < dimensions; d++ {
-					swarm[i].vel[d] = max*r.Float64() + min
-					swarm[i].pos[d] = max*r.Float64() + min/2
-					swarm[i].pBest[d] = swarm[i].pos[d]
+					cSwarm[i].vel[d] = max*r.Float64() + min
+					cSwarm[i].pos[d] = max*r.Float64() + halfMin
+					cSwarm[i].pBest[d] = cSwarm[i].pos[d]
 				}
-				fitness = f(swarm[i].pos)
-				swarm[i].locMin = fitness
-				if fitness < swarmMinimum {
-					copy(swarmBest, swarm[i].pos)
-					swarmMinimum = fitness
+				if cSwarm[i].locMin = f(cSwarm[i].pos); cSwarm[i].locMin < cMin {
+					cMin = cSwarm[i].locMin
+					copy(cBest, cSwarm[i].pos)
 				}
 			}
 
-			var chi, phiP, phiG float64
-			syncs := r.Intn(numCPU) + 1
-			if syncs == 1 {
-				syncs += r.Intn(numCPU)
+			var sol solution
+			for m := 0; m < moves; m++ {
+				sol = <-ring
+				if cMin < sol.min {
+					sol.min = cMin
+					copy(sol.pos, cBest)
+				} else {
+					cMin = sol.min
+					copy(cBest, sol.pos)
+				}
+				ring <- sol
 			}
-			for s := 0; s < syncs; s++ {
-				r = rand.New(rand.NewSource(time.Now().UnixNano() + int64(syncs))) //#nosec G404
-				for it := 0; it < pr.iterations; it++ {
-					for i := range swarm {
-						chi, phiP, phiG = r.Float64()*0.1+0.9, pr.cP*r.Float64(), pr.cG*r.Float64()
-						for d := 0; d < dimensions; d++ {
-							// vi = χ · (ω · vi + φ1 · (pi − xi) + φ2 · (pg − xi))
-							swarm[i].vel[d] = chi * (pr.omega*swarm[i].vel[d] +
-								phiP*(swarm[i].pBest[d]-swarm[i].pos[d]) +
-								phiG*(swarmBest[d]-swarm[i].pos[d]))
-							swarm[i].pos[d] += swarm[i].vel[d]
-							switch {
-							case swarm[i].pos[d] > max:
-								swarm[i].pos[d] = max
-							case swarm[i].pos[d] < min:
-								swarm[i].pos[d] = min
-							}
+
+			var chi, phiP, phiG, fitness float64
+			for it := 0; it < pr.iterations; it++ {
+				for i := range cSwarm {
+					chi, phiP, phiG = r.Float64()*0.1+0.9, pr.cP*r.Float64(), pr.cG*r.Float64()
+					for d := 0; d < dimensions; d++ {
+						// vi = χ · (ω · vi + φ1 · (pi − xi) + φ2 · (pg − xi))
+						cSwarm[i].vel[d] = chi * (pr.omega*cSwarm[i].vel[d] +
+							phiP*(cSwarm[i].pBest[d]-cSwarm[i].pos[d]) +
+							phiG*(cBest[d]-cSwarm[i].pos[d]))
+						cSwarm[i].pos[d] += cSwarm[i].vel[d]
+						switch {
+						case cSwarm[i].pos[d] > max:
+							cSwarm[i].pos[d] = max
+						case cSwarm[i].pos[d] < min:
+							cSwarm[i].pos[d] = min
 						}
-						fitness = f(swarm[i].pos)
-						if fitness < swarm[i].locMin {
-							copy(swarm[i].pBest, swarm[i].pos)
-							swarm[i].locMin = fitness
-						}
-						if fitness < swarmMinimum {
-							copy(swarmBest, swarm[i].pos)
-							swarmMinimum = fitness
+					}
+
+					if fitness = f(cSwarm[i].pos); fitness < cSwarm[i].locMin {
+						cSwarm[i].locMin = fitness
+						copy(cSwarm[i].pBest, cSwarm[i].pos)
+
+						if fitness < cMin {
+							cMin = fitness
+							copy(cBest, cSwarm[i].pos)
 						}
 					}
 				}
-				if minimum := <-chMinimum; swarmMinimum < minimum {
-					chMinimum <- swarmMinimum
-					chBest <- swarmBest
-				}
 			}
+
+			sol = <-ring
+			if cMin < sol.min {
+				sol.min = cMin
+				copy(sol.pos, cBest)
+			}
+			ring <- sol
 		}()
 	}
 	wg.Wait()
-	gMinimum, gBest := <-chMinimum, <-chBest
-	signal <- struct{}{}
+	close(ring)
 
-	return gMinimum, gBest
+	gBest := make([]float64, dimensions)
+	gMin := math.MaxFloat64
+	for sol := range ring {
+		if sol.min < gMin {
+			gMin = sol.min
+			copy(gBest, sol.pos)
+		}
+	}
+
+	return gMin, gBest
 }
