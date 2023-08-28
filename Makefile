@@ -11,6 +11,9 @@ info:
 lint:
 	@golangci-lint run
 
+test-problems:
+	go test --tags=problems -v .
+
 test:
 	go test -v ./...
 
@@ -29,4 +32,4 @@ escape: info
 build:
 	@$(GOBUILD) -ldflags "-s -w"
 
-.PHONY: info lint test test-race run run-race escape build
+.PHONY: info lint test-problems test test-race run run-race escape build
