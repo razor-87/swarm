@@ -20,6 +20,7 @@ func ackley(xs []float64) float64 {
 
 // https://www.sfu.ca/~ssurjano/beale.html
 func beale(xs []float64) float64 {
+	xs = xs[:2:2]
 	mul1 := xs[0] * xs[1]
 	mul2 := mul1 * xs[1]
 	return math.Pow(1.5-xs[0]+mul1, 2) + math.Pow(2.25-xs[0]+mul2, 2) + math.Pow(2.625-xs[0]+mul2*xs[1], 2)
@@ -27,17 +28,20 @@ func beale(xs []float64) float64 {
 
 // https://www.sfu.ca/~ssurjano/booth.html
 func booth(xs []float64) float64 {
+	xs = xs[:2:2]
 	return math.Pow(xs[0]+2*xs[1]-7, 2) + math.Pow(2*xs[0]+xs[1]-5, 2)
 }
 
 // https://www.sfu.ca/~ssurjano/drop.html
 func dropWave(xs []float64) float64 {
+	xs = xs[:2:2]
 	sqSum := xs[0]*xs[0] + xs[1]*xs[1]
 	return -(1 + math.Cos(12*math.Sqrt(sqSum))) / (0.5*sqSum + 2)
 }
 
 // https://www.sfu.ca/~ssurjano/egg.html
 func eggholder(xs []float64) float64 {
+	xs = xs[:2:2]
 	z := xs[1] + 47
 	return -z*math.Sin(math.Sqrt(math.Abs(xs[0]/2+z))) -
 		xs[0]*math.Sin(math.Sqrt(math.Abs(xs[0]-z)))
@@ -56,6 +60,7 @@ func griewank(xs []float64) float64 {
 
 // https://www.sfu.ca/~ssurjano/holder.html
 func holderTable(xs []float64) float64 {
+	xs = xs[:2:2]
 	return -math.Abs(math.Sin(xs[0]) * math.Cos(xs[1]) *
 		math.Exp(math.Abs(1-math.Sqrt(xs[0]*xs[0]+xs[1]*xs[1])/math.Pi)))
 }
@@ -85,6 +90,7 @@ func rastrigin(xs []float64) (ret float64) {
 
 // https://www.sfu.ca/~ssurjano/schaffer2.html
 func schaffer2(xs []float64) float64 {
+	xs = xs[:2:2]
 	sq0, sq1 := xs[0]*xs[0], xs[1]*xs[1]
 	den, s := 1+0.001*(sq0+sq1), math.Sin(sq0-sq1)
 	return 0.5 + (s*s-0.5)/(den*den)

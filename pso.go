@@ -8,10 +8,8 @@ import (
 	"time"
 )
 
-const swarmSize = 223
-
 // M.E.H. Pedersen - Good Parameters for Particle Swarm Optimization (2010)
-var parameters = [...]parameter{
+var parameters = map[int]parameter{
 	2: {4000, -0.2797, 1.5539, 3.0539},
 	5: {10000, -0.3699, -0.1207, 3.3657},
 }
@@ -21,8 +19,8 @@ type parameter struct {
 	omega, cP, cG float64
 }
 
-type particle struct {
-	vel, pos, pBest []float64
+type swarm [223]struct {
+	vel, pos, pBest [5]float64
 	locMin          float64
 }
 
@@ -52,21 +50,20 @@ func pso(f func([]float64) float64, min, max float64, dimensions int) (float64, 
 		go func() {
 			defer wg.Done()
 
-			var cSwarm [swarmSize]particle
+			var cSwarm swarm
 			cBest := make([]float64, dimensions)
 			cMin := math.MaxFloat64
 			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(c))) //#nosec G404
 
 			for i := range cSwarm {
-				cSwarm[i].vel, cSwarm[i].pos, cSwarm[i].pBest = make([]float64, dimensions), make([]float64, dimensions), make([]float64, dimensions)
 				for d := 0; d < dimensions; d++ {
 					cSwarm[i].vel[d] = max*r.Float64() + min
 					cSwarm[i].pos[d] = max*r.Float64() + halfMin
 					cSwarm[i].pBest[d] = cSwarm[i].pos[d]
 				}
-				if cSwarm[i].locMin = f(cSwarm[i].pos); cSwarm[i].locMin < cMin {
+				if cSwarm[i].locMin = f(cSwarm[i].pos[:]); cSwarm[i].locMin < cMin {
 					cMin = cSwarm[i].locMin
-					copy(cBest, cSwarm[i].pos)
+					copy(cBest, cSwarm[i].pos[:])
 				}
 			}
 
@@ -101,13 +98,13 @@ func pso(f func([]float64) float64, min, max float64, dimensions int) (float64, 
 						}
 					}
 
-					if fitness = f(cSwarm[i].pos); fitness < cSwarm[i].locMin {
+					if fitness = f(cSwarm[i].pos[:]); fitness < cSwarm[i].locMin {
 						cSwarm[i].locMin = fitness
-						copy(cSwarm[i].pBest, cSwarm[i].pos)
+						copy(cSwarm[i].pBest[:], cSwarm[i].pos[:])
 
 						if fitness < cMin {
 							cMin = fitness
-							copy(cBest, cSwarm[i].pos)
+							copy(cBest, cSwarm[i].pos[:])
 						}
 					}
 				}
